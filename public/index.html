@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automated Handling System</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="commandbar" role="banner">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">▦</span>
+    <div>
+      <h1>Automated Handling System</h1>
+      <p class="tagline">Command center · Paris Pehlivanovic</p>
+    </div>
+  </div>
+  <div class="commandbar-mid">
+    <label class="search" for="search">
+      <span aria-hidden="true">⌕</span>
+      <input id="search" type="search" placeholder="Search projects, decisions, automations…  ( / )" autocomplete="off">
+    </label>
+  </div>
+  <div class="commandbar-right">
+    <span id="statusPill" class="status-pill" role="status" aria-live="polite">Loading…</span>
+    <button id="themeToggle" class="btn btn-ghost" type="button" aria-pressed="false" title="Toggle light / dark">◐ Theme</button>
+    <button id="exportJsonBtn" class="btn btn-ghost" type="button" title="Download a full JSON backup">⇩ JSON</button>
+    <button id="exportMdBtn" class="btn" type="button" title="Download a copyable Markdown report">⇩ Markdown</button>
+  </div>
+</div>
+
+<main id="main">
+  <div id="skeleton" class="skeleton-wrap" aria-hidden="true">
+    <div class="sk sk-card"></div>
+    <div class="sk sk-card"></div>
+    <div class="sk sk-card"></div>
+  </div>
+
+  <div id="app" hidden>
+    <p class="snapshot-note" role="note">⚠ Statuses below are <strong>last-known snapshots</strong> recorded by the team — they are <strong>not live-polled</strong> from the underlying systems. Each project card shows its source date.</p>
+
+    <section aria-labelledby="decisionsHeading">
+      <div class="section-head">
+        <h2 id="decisionsHeading">Needs your word <span id="decisionsCount" class="count-badge"></span></h2>
+        <div class="filters" role="group" aria-label="Decision filters">
+          <label>Urgency
+            <select id="urgencyFilter">
+              <option value="">All urgencies</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </label>
+          <label>Project
+            <select id="decisionProjectFilter">
+              <option value="">All projects</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <ul id="decisionList" class="decision-list"></ul>
+      <p id="noDecisions" class="empty" hidden>Nothing waiting. The queue is clear.</p>
+    </section>
+
+    <section aria-labelledby="projectsHeading">
+      <div class="section-head">
+        <h2 id="projectsHeading">Projects <span id="projectsCount" class="count-badge"></span></h2>
+        <div class="filters" role="group" aria-label="Project filters">
+          <label>Status
+            <select id="statusFilter">
+              <option value="">All statuses</option>
+              <option value="running">Running</option>
+              <option value="needs_word">Needs word</option>
+              <option value="blocked">Blocked</option>
+              <option value="idle">Idle</option>
+              <option value="healthy">Healthy</option>
+            </select>
+          </label>
+          <label>Sort
+            <select id="sortSelect">
+              <option value="default">Default order</option>
+              <option value="name">Name A–Z</option>
+              <option value="status">Status</option>
+              <option value="urgency">Most decisions first</option>
+            </select>
+          </label>
+          <button id="archivedToggle" class="btn btn-ghost" type="button" aria-expanded="false">Archived (0)</button>
+        </div>
+      </div>
+      <div id="projectGrid" class="project-grid"></div>
+      <div id="archivedWrap" hidden>
+        <h3>Archived projects</h3>
+        <ul id="archivedList" class="archived-list"></ul>
+      </div>
+    </section>
+
+    <section aria-labelledby="automationsHeading">
+      <div class="section-head">
+        <h2 id="automationsHeading">Automations <span id="automationsCount" class="count-badge"></span></h2>
+        <div class="filters" role="group" aria-label="Automation filters">
+          <label>Status
+            <select id="automationStatusFilter">
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </label>
+          <label>Project
+            <select id="automationProjectFilter">
+              <option value="">All projects</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="healthBars" class="health-bars" aria-label="Automation health per project"></div>
+      <ul id="automationList" class="automation-list"></ul>
+    </section>
+
+    <section aria-labelledby="activityHeading">
+      <h2 id="activityHeading">Activity</h2>
+      <form id="activityForm" class="activity-form">
+        <label for="activityText">Add a note</label>
+        <div class="activity-row">
+          <select id="activityProject" aria-label="Project for this note"></select>
+          <input id="activityText" type="text" placeholder="What happened?" maxlength="500" required>
+          <button class="btn" type="submit">Add note</button>
+        </div>
+      </form>
+      <ul id="activityList" class="activity-list"></ul>
+    </section>
+  </div>
+</main>
+
+<div id="toastRegion" class="toast-region" aria-live="polite"></div>
+
+<div id="confirmDialog" class="dialog-backdrop" hidden>
+  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p id="confirmText"></p>
+    <div class="dialog-actions">
+      <button id="confirmCancel" class="btn btn-ghost" type="button">Cancel</button>
+      <button id="confirmOk" class="btn btn-danger" type="button">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="formDialog" class="dialog-backdrop" hidden>
+  <div class="dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <h3 id="formTitle">Edit</h3>
+    <form id="formDialogForm">
+      <div id="formFields"></div>
+      <div class="dialog-actions">
+        <button id="formCancel" class="btn btn-ghost" type="button">Cancel</button>
+        <button class="btn" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

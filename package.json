@@ -1,0 +1,1 @@
+{"description":"Automated Handling System — command center for Paris Pehlivanovic's projects: decisions, automations, and status tracking.","license":"UNLICENSED","main":"server.js","name":"automated-handling-system","private":true,"scripts":{"start":"node server.js"},"version":"1.0.0"}
