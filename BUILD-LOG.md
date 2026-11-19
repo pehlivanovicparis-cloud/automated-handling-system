@@ -31,6 +31,12 @@ Dashboard with last-known statuses + source dates (labelled snapshots, not live-
 ## Incident during smoke test (my error)
 While stopping my second test server I ran `pkill -f "node server.js"` — an over-broad pattern that also matched two other `node server.js` processes (PIDs 8651, 8793), almost certainly sibling subagents' smoke-test servers for the other three apps, and SIGTERM'd my own shell. Both PIDs are gone. No data loss (their data.json files persist on disk and reload on restart), but the siblings may need to restart their test servers. Lesson: never `pkill -f` a generic pattern in a shared environment — kill by exact PID or port.
 
+## Push (2026-11-18 ~16:26 EST)
+- Pre-push checks: branch `main` existed with exactly 1 commit (`e7fec2e8c727afb617e96e2612afb3a3a274a1ec`, GitHub's Initial commit); `get_file_contents` confirmed remote README.md was only the generated placeholder, so replacing it was authorized.
+- First `push-files` attempt FAILED (approved on the card, then provider error 404 `failed to get repository info`): I had omitted `--account`, so the CLI used the default account bigsmoksosa-boop, whose installation cannot see pehlivanovicparis-cloud repos. Lesson: always pass `--account ffc4b840fbf24e6da66fed519d0cdcba`.
+- Second attempt (with `--account`) SUCCEEDED. Commit `dcb1276a5684a49ccc5b7705e16e83cb148a0108` — "Automated Handling System v2.0 — standalone codebase", 10 files. Sync record written adjacent to the source dir.
+- Verified by read-back: README.md (ours, 2,914 B), server.js, data/seed.json, public/app.js — all byte-identical to local (UTF-8 re-encoded). Head now has 2 commits.
+
 ## Self-score
 1) Goal hit? Yes — full v2.0 feature set reproduced from the live probe, smoke-tested end to end, pushed.
 2) Tools right? Yes — artifact probe for exact seed, stdlib-only Node, GitHub CLI per the snapshot-push guide.
