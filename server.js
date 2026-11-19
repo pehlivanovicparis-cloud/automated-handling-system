@@ -21,24 +21,31 @@ const AUTOMATION_STATUSES = ['active', 'paused', 'blocked'];
 const DECISION_STATUSES = ['approved', 'done', 'deferred', 'dismissed'];
 const URGENCIES = ['low', 'medium', 'high'];
 
-// ---------------------------------------------------------------- data store
-function loadData() {
-  if (fs.existsSync(DATA_PATH)) {
-    return JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
-  }
-  const seed = JSON.parse(fs.readFileSync(SEED_PATH, 'utf8'));
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  saveData(seed);
-  return seed;
+// Store: file-backed locally (data/data.json, created from seed on first
+// run — identical to the original behaviour), Vercel KV-backed when
+// KV_REST_API_URL + KV_REST_API_TOKEN are set. See lib/store.js.
+const { createStore } = require('./lib/store');
+const store = createStore({
+  key: 'ahs:state',
+  seedPath: SEED_PATH,
+  dataPath: DATA_PATH,
+});
+
+// In-memory state. File mode: loaded once, like the original server.
+// KV mode: reloaded fresh from KV on every request (a serverless
+// invocation must never trust a warm in-memory copy).
+let db = null;
+
+async function ensureDb() {
+  if (db === null || store.useKv) db = await store.load();
+  return db;
 }
 
-function saveData(data) {
-  const tmp = DATA_PATH + '.tmp-' + process.pid;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmp, DATA_PATH);
+// Same save semantics as before: every mutation commits. File mode writes
+// via tmp file + rename; KV mode writes the whole state to the KV key.
+async function saveData(data) {
+  await store.save(data);
 }
-
-let db = loadData();
 
 function nextId(list) {
   return list.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
@@ -200,6 +207,7 @@ function exportMarkdown() {
 
 // ---------------------------------------------------------------- routing
 async function handle(req, res) {
+  await ensureDb();
   const url = new URL(req.url, 'http://localhost');
   const pathname = url.pathname;
   const method = req.method;
@@ -245,7 +253,7 @@ async function handle(req, res) {
     };
     db.decisions.push(dec);
     addActivity(dec.projectId, 'New decision added: ' + dec.title);
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 201, dec);
   }
   const resolveMatch = pathname.match(/^\/api\/decisions\/(\d+)\/resolve$/);
@@ -267,7 +275,7 @@ async function handle(req, res) {
       dec.resolvedAt = new Date().toISOString();
       addActivity(dec.projectId, `Decision ${b.status}: ${dec.title}`);
     }
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 200, dec);
   }
   const deleteDecMatch = pathname.match(/^\/api\/decisions\/(\d+)\/delete$/);
@@ -282,7 +290,7 @@ async function handle(req, res) {
     if (idx === -1) return sendJson(res, 404, { error: 'decision not found' });
     const [removed] = db.decisions.splice(idx, 1);
     addActivity(removed.projectId, 'Decision permanently deleted: ' + removed.title);
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 200, { deleted: removed.id });
   }
 
@@ -307,7 +315,7 @@ async function handle(req, res) {
     };
     db.automations.push(a);
     addActivity(a.projectId, 'Automation added: ' + a.name);
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 201, a);
   }
   const autoMatch = pathname.match(/^\/api\/automations\/(\d+)$/);
@@ -329,7 +337,7 @@ async function handle(req, res) {
     }
     if (b.projectId !== undefined) a.projectId = Number(b.projectId);
     if (typeof b.sortOrder === 'number') a.sortOrder = b.sortOrder;
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 200, a);
   }
   const autoDelMatch = pathname.match(/^\/api\/automations\/(\d+)\/delete$/);
@@ -338,7 +346,7 @@ async function handle(req, res) {
     if (idx === -1) return sendJson(res, 404, { error: 'automation not found' });
     const [removed] = db.automations.splice(idx, 1);
     addActivity(removed.projectId, 'Automation deleted: ' + removed.name);
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 200, { deleted: removed.id });
   }
 
@@ -367,7 +375,7 @@ async function handle(req, res) {
     };
     db.projects.push(p);
     addActivity(p.id, 'Project added: ' + p.name);
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 201, p);
   }
   const projMatch = pathname.match(/^\/api\/projects\/(\d+)$/);
@@ -390,7 +398,7 @@ async function handle(req, res) {
     if (typeof b.sourceDate === 'string') p.sourceDate = b.sourceDate;
     if (typeof b.sortOrder === 'number') p.sortOrder = b.sortOrder;
     p.updatedAt = new Date().toISOString();
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 200, p);
   }
   const archiveMatch = pathname.match(/^\/api\/projects\/(\d+)\/archive$/);
@@ -400,7 +408,7 @@ async function handle(req, res) {
     p.archived = true;
     p.updatedAt = new Date().toISOString();
     addActivity(p.id, 'Project archived: ' + p.name);
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 200, p);
   }
   const restoreMatch = pathname.match(/^\/api\/projects\/(\d+)\/restore$/);
@@ -410,7 +418,7 @@ async function handle(req, res) {
     p.archived = false;
     p.updatedAt = new Date().toISOString();
     addActivity(p.id, 'Project restored: ' + p.name);
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 200, p);
   }
 
@@ -421,7 +429,7 @@ async function handle(req, res) {
     if (!b.text || typeof b.text !== 'string') return sendJson(res, 400, { error: 'text is required' });
     if (!requireProject(b.projectId, res)) return;
     addActivity(b.projectId, b.text.trim());
-    saveData(db);
+    await saveData(db);
     return sendJson(res, 201, db.activity[0]);
   }
 
@@ -429,13 +437,20 @@ async function handle(req, res) {
   return sendJson(res, 404, { error: 'not found' });
 }
 
-const server = http.createServer((req, res) => {
+// The request handler is exported so Vercel can run it serverless
+// (api/index.js). `node server.js` still starts the standalone server.
+function handler(req, res) {
   handle(req, res).catch((err) => {
     console.error(err);
     if (!res.headersSent) sendJson(res, 500, { error: 'internal error' });
   });
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`Automated Handling System listening on http://localhost:${PORT}`);
-});
+module.exports = handler;
+
+if (require.main === module) {
+  const server = http.createServer(handler);
+  server.listen(PORT, () => {
+    console.log(`Automated Handling System listening on http://localhost:${PORT}`);
+  });
+}
