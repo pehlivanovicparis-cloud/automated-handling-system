@@ -3,7 +3,7 @@
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index.js" }],
   "functions": {
     "api/index.js": {
-      "includeFiles": ["public/**", "data/seed.json"]
+      "includeFiles": "{public/**,data/seed.json}"
     }
   }
 }
