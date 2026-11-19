@@ -228,6 +228,11 @@ select, input[type="text"], input[type="search"], textarea {
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* Dialogs + toasts */
+/* NOTE: .dialog-backdrop and .skeleton-wrap set display:flex/grid, which
+   outranks the browser's built-in [hidden]{display:none} rule. Without this
+   override the dialogs render on page load despite hidden, and Cancel/Escape
+   (which only re-set hidden) can never dismiss them. */
+[hidden] { display: none !important; }
 .dialog-backdrop {
   position: fixed;
   inset: 0;
